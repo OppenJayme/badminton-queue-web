@@ -1,35 +1,59 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { RequireAuth, RequireQM } from "./components/Guard";
 
-function App() {
-  const [count, setCount] = useState(0)
+// pages
+import Login from "./pages/Login";
+import Courts from "./pages/Courts";
+import Queue from "./pages/Queue";
+import QMDashboard from "./pages/QMDashboard";
 
+export default function App() {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <BrowserRouter>
+      <header style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", gap: 12 }}>
+        <Link to="/">Courts</Link>
+        <Link to="/qm">QM</Link>
+        <div style={{ marginLeft: "auto", opacity: 0.6 }}>
+          Badminton Queue (Web MVP)
+        </div>
+      </header>
 
-export default App
+      <main style={{ padding: 16 }}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+
+          {/* Player routes */}
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Courts />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/queue/:courtId"
+            element={
+              <RequireAuth>
+                <Queue />
+              </RequireAuth>
+            }
+          />
+
+          {/* QueueMaster/Admin routes */}
+          <Route
+            path="/qm"
+            element={
+              <RequireQM>
+                <QMDashboard />
+              </RequireQM>
+            }
+          />
+
+          {/* fallback */}
+          <Route path="*" element={<div>Not found</div>} />
+        </Routes>
+      </main>
+    </BrowserRouter>
+  );
+}
