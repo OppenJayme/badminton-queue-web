@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useSetAtom } from "jotai";
 import { tokenAtom, roleAtom, nameAtom } from "../state/auth";
-import { login } from "../api/client";
+import { login, register } from "../api/client";
 import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 export default function Login() {
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("qm@example.com");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("Qm123!");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const setToken = useSetAtom(tokenAtom);
   const setRole = useSetAtom(roleAtom);
@@ -17,7 +20,14 @@ export default function Login() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await login(email, password);
+      if (mode === "register" && password !== confirmPassword) {
+        setErr("Passwords do not match");
+        return;
+      }
+      const res =
+        mode === "login"
+          ? await login(email, password)
+          : await register(email, displayName || email.split("@")[0], password);
       setToken(res.token);
       setRole(res.role as any);
       setName(res.displayName);
@@ -51,9 +61,28 @@ export default function Login() {
           />
         </div>
 
-        <h3 className="text-center fw-bold mb-1">Log in to your account</h3>
+        <div className="d-flex justify-content-center mb-3 gap-2">
+          <button
+            type="button"
+            className={`btn btn-sm ${mode === "login" ? "btn-primary" : "btn-outline-secondary"}`}
+            onClick={() => { setMode("login"); setErr(null); }}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${mode === "register" ? "btn-primary" : "btn-outline-secondary"}`}
+            onClick={() => { setMode("register"); setErr(null); }}
+          >
+            Register
+          </button>
+        </div>
+
+        <h3 className="text-center fw-bold mb-1">
+          {mode === "login" ? "Log in to your account" : "Create your account"}
+        </h3>
         <p className="text-center text-muted mb-3">
-          Welcome back! Please enter your details.
+          {mode === "login" ? "Welcome back! Please enter your details." : "Sign up to join queues and groups."}
         </p>
 
         <form onSubmit={submit}>
@@ -68,6 +97,19 @@ export default function Login() {
             />
           </div>
 
+          {mode === "register" && (
+            <div className="mb-3 text-start">
+              <label className="form-label fw-semibold">Display name</label>
+              <input
+                className="form-control"
+                type="text"
+                placeholder="How should we call you?"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+              />
+            </div>
+          )}
+
           <div className="mb-2 text-start">
             <label className="form-label fw-semibold">Password</label>
             <input
@@ -79,6 +121,19 @@ export default function Login() {
             />
           </div>
 
+          {mode === "register" && (
+            <div className="mb-2 text-start">
+              <label className="form-label fw-semibold">Confirm password</label>
+              <input
+                className="form-control"
+                type="password"
+                placeholder="Repeat password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          )}
+
           {err && <div className="text-danger small mb-2">{err}</div>}
 
           <button
@@ -86,7 +141,7 @@ export default function Login() {
             className="btn w-100 text-white fw-semibold mb-3"
             style={{ backgroundColor: "#4CAF50" }}
           >
-            Continue with Email
+            {mode === "login" ? "Continue with Email" : "Create account"}
           </button>
         </form>
 

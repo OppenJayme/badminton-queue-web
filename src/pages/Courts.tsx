@@ -47,14 +47,14 @@ export default function Courts() {
                   <option value="">-- select location --</option>
                   {locs.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.city} — {l.name}
+                      {l.city} - {l.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="small text-muted">
-                Tip: Start by choosing the venue you&apos;re playing at. You can
+                Tip: Start by choosing the venue you're playing at. You can
                 then open the specific court queue.
               </div>
             </div>
@@ -83,7 +83,7 @@ export default function Courts() {
                     <div className="card-body d-flex flex-column">
                       <h5 className="fw-bold mb-1">
                         Court #{c.courtNumber}
-                        {c.name ? ` — ${c.name}` : ""}
+                        {c.name ? ` - ${c.name}` : ""}
                       </h5>
                       <p className="text-muted small mb-3">
                         Ideal for up to 4 players per game. Join the queue to

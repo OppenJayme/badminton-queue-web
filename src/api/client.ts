@@ -43,6 +43,13 @@ export async function login(email: string, password: string) {
   );
 }
 
+export async function register(email: string, displayName: string, password: string) {
+  return api<{ userId: number; token: string; role: string; displayName: string }>(
+    "/api/auth/register",
+    { method: "POST", body: JSON.stringify({ email, displayName, password }) }
+  );
+}
+
 export const getLocations = (token: string) =>
   api<any[]>("/api/locations", {}, token);
 
