@@ -14,8 +14,24 @@ export async function api<T>(
     }
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText} — ${text}`);
+    const contentType = res.headers.get("content-type");
+    let message = `${res.status} ${res.statusText}`;
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        const body = await res.json();
+        if ((body as any)?.message) {
+          message += ` - ${(body as any).message}`;
+        } else {
+          message += ` - ${JSON.stringify(body)}`;
+        }
+      } catch {
+        message += " - Unexpected error response";
+      }
+    } else {
+      const text = await res.text();
+      if (text) message += ` - ${text}`;
+    }
+    throw new Error(message);
   }
   return res.json();
 }
