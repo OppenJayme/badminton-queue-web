@@ -5,10 +5,9 @@ import { login } from "../api/client";
 import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-
 export default function Login() {
-  const [email, setEmail] = useState("player@example.com");
-  const [password, setPassword] = useState("Player123!");
+  const [email, setEmail] = useState("qm@example.com");
+  const [password, setPassword] = useState("Qm123!");
   const [err, setErr] = useState<string | null>(null);
   const setToken = useSetAtom(tokenAtom);
   const setRole = useSetAtom(roleAtom);
@@ -28,15 +27,9 @@ export default function Login() {
     }
   }
 
-  function continueAsGuest() {
-    nav("/guest");
-  }
-
   return (
     <div className="d-flex justify-content-center align-items-center bg-light vh-100">
-
       <div className="card shadow-sm p-4" style={{ maxWidth: 420, width: "100%", borderRadius: "16px" }}>
-        
         {/* Logo */}
         <div
           className="mx-auto mb-3 d-flex justify-content-center align-items-center"
@@ -80,7 +73,7 @@ export default function Login() {
             <input
               className="form-control"
               type="password"
-              placeholder="••••••••"
+              placeholder="Password"
               value={password}
               onChange={e => setPassword(e.target.value)}
             />
@@ -104,14 +97,6 @@ export default function Login() {
           <div className="flex-grow-1 border-top"></div>
         </div>
 
-        {/* Guest Button */}
-        <button
-          className="btn btn-outline-secondary w-100 mb-3"
-          onClick={continueAsGuest}
-        >
-          Continue as Guest
-        </button>
-
         {/* Test accounts */}
         <div className="text-muted small mb-2 text-start">
           Try QM: <strong>qm@example.com</strong> / <strong>Qm123!</strong><br />
@@ -119,12 +104,11 @@ export default function Login() {
         </div>
 
         <div className="text-center small text-muted">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <a className="text-success fw-semibold" href="#">
             Ask staff to register
           </a>
         </div>
-
       </div>
     </div>
   );
