@@ -100,10 +100,16 @@ export const startQueueMatchManual = (queueId: number, playerIds: number[], mode
     body: JSON.stringify({ playerIds, mode })
   }, token);
 
-export const finishQueueMatch = (queueId: number, matchId: number, scoreText: string | undefined, token: string) =>
+export const finishQueueMatch = (
+  queueId: number,
+  matchId: number,
+  winnerId: number,
+  sets: { a: number; b: number }[],
+  token: string
+) =>
   api<any>(`/api/queues/${queueId}/finish-match`, {
     method: "POST",
-    body: JSON.stringify({ matchId, scoreText })
+    body: JSON.stringify({ matchId, winnerId, sets })
   }, token);
 
 export const getOngoingMatches = (queueId: number, token: string) =>

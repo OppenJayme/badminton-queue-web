@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useAtomValue } from "jotai";
 import { tokenAtom, nameAtom } from "../state/auth";
 import {
@@ -16,47 +16,17 @@ import {
   deletePlayer,
   getMatchHistory
 } from "../api/client";
+import type {
+  MatchHistory,
+  OngoingMatch,
+  Player,
+  QueueDetails,
+  QueueEntry
+} from "../types/queue";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-type Player = {
-  id: number;
-  displayName: string;
-  gamesPlayed: number;
-  isRegistered: boolean;
-};
-
-type QueueEntry = {
-  id: number;
-  position: number;
-  playerId: number;
-  displayName: string;
-  gamesPlayed: number;
-  joinedAt: string;
-};
-
-type QueueDetails = {
-  id: number;
-  name: string;
-  mode: "Singles" | "Doubles";
-  isOpen: boolean;
-  entries: QueueEntry[];
-};
-
-type OngoingMatch = {
-  id: number;
-  startedAt: string;
-  players: { id: number; name: string }[];
-};
-
-type MatchHistory = {
-  id: number;
-  status: string;
-  mode: string;
-  startTime?: string;
-  finishTime?: string;
-  scoreText?: string;
-  players: { id: number; name: string }[];
-};
+type ActionErrors = Record<string, string | null>;
+type ActionLoading = Record<string, boolean>;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -72,7 +42,6 @@ export default function QueueManager() {
   const [mode, setMode] = useState<"Singles" | "Doubles">("Singles");
   const [queueName, setQueueName] = useState("Main Queue");
   const [newPlayerName, setNewPlayerName] = useState("");
-  const [lastMatchId, setLastMatchId] = useState<number | null>(null);
   const [tab, setTab] = useState<"auto" | "manual" | "ongoing" | "history">("auto");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [ongoing, setOngoing] = useState<OngoingMatch[]>([]);
@@ -87,6 +56,44 @@ export default function QueueManager() {
     { a: "", b: "" }
   ]);
   const [err, setErr] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<ActionErrors>({});
+  const [loading, setLoading] = useState<ActionLoading>({});
+  const [info, setInfo] = useState<string | null>(null);
+
+  const uniquePlayers = useMemo(() => {
+    const seen = new Set<string>();
+    const dedup: Player[] = [];
+    players.forEach((p) => {
+      const key = p.displayName.trim().toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      dedup.push(p);
+    });
+    return dedup;
+  }, [players]);
+
+  const queuedIds = useMemo(() => {
+    const ids = new Set<number>();
+    if (queue) queue.entries.forEach((e: QueueEntry) => ids.add(e.playerId));
+    return ids;
+  }, [queue]);
+
+  async function runAction<T>(key: string, fn: () => Promise<T>, successMessage?: string) {
+    setActionErr((prev) => ({ ...prev, [key]: null }));
+    setLoading((prev) => ({ ...prev, [key]: true }));
+    setInfo(null);
+    try {
+      const res = await fn();
+      if (successMessage) setInfo(successMessage);
+      return res;
+    } catch (e: any) {
+      const msg = e?.message || "Something went wrong";
+      setActionErr((prev) => ({ ...prev, [key]: msg }));
+      return null;
+    } finally {
+      setLoading((prev) => ({ ...prev, [key]: false }));
+    }
+  }
 
   useEffect(() => {
     refreshPlayers();
@@ -144,129 +151,125 @@ export default function QueueManager() {
   }, [mode, queue?.id]);
 
   async function handleCreateQueue() {
-    try {
-      const res = await createQueue(queueName || "Queue", mode, token);
+    await runAction("createQueue", async () => {
+      const res = await createQueue(queueName.trim() || "Queue", mode, token);
       await loadQueue(res.id);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+      return res;
+    }, "Queue created");
   }
 
   async function handleAddPlayer() {
-    if (!newPlayerName.trim()) {
-      setErr("Player name required");
+    const trimmed = newPlayerName.trim();
+    if (!trimmed) {
+      setActionErr((prev) => ({ ...prev, addPlayer: "Player name required" }));
       return;
     }
-    try {
-      await createPlayer(newPlayerName.trim(), false, token);
+    const exists = uniquePlayers.some((p) => p.displayName.trim().toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      setActionErr((prev) => ({ ...prev, addPlayer: "Name already exists" }));
+      return;
+    }
+    await runAction("addPlayer", async () => {
+      await createPlayer(trimmed, false, token);
       setNewPlayerName("");
       await refreshPlayers();
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Player added");
   }
 
   async function handleDeletePlayer(playerId: number) {
-    try {
+    await runAction(`delete-${playerId}`, async () => {
       await deletePlayer(playerId, token);
       await refreshPlayers();
       if (queue) await loadQueue(queue.id);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Player removed");
   }
 
   async function handleEnqueue(playerId: number) {
     if (!queue) return;
-    try {
+    await runAction(`enqueue-${playerId}`, async () => {
       await enqueueQueue(queue.id, playerId, token);
       await loadQueue(queue.id);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Added to queue");
   }
 
   async function handleRemove(playerId: number) {
     if (!queue) return;
-    try {
+    await runAction(`remove-${playerId}`, async () => {
       await removeFromQueue(queue.id, playerId, token);
       await loadQueue(queue.id);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Removed from queue");
   }
 
   async function handleStartMatch() {
     if (!queue) return;
-    try {
-      const res = await startQueueMatch(queue.id, mode, token);
-      setLastMatchId(res.matchId);
+    await runAction("startAuto", async () => {
+      await startQueueMatch(queue.id, mode, token);
       await loadQueue(queue.id);
       await refreshPlayers();
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Match started");
   }
 
   async function handleStartManualMatch() {
     if (!queue) return;
     if (selectedIds.length !== needed) {
-      setErr(`Select exactly ${needed} players for ${mode.toLowerCase()}.`);
+      setActionErr((prev) => ({ ...prev, startManual: `Select exactly ${needed} players for ${mode.toLowerCase()}.` }));
       return;
     }
-    try {
-      const res = await startQueueMatchManual(queue.id, selectedIds, mode, token);
-      setLastMatchId(res.matchId);
+    await runAction("startManual", async () => {
+      await startQueueMatchManual(queue.id, selectedIds, mode, token);
       setSelectedIds([]);
       await loadQueue(queue.id);
       await refreshPlayers();
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Match started");
   }
 
   async function handleFinishSpecific(matchId: number) {
     if (!queue) return;
-    try {
-      const match = ongoing.find((m) => m.id === matchId);
-      if (!match) return;
-      setFinishModal({ matchId, players: match.players });
-      setWinnerId(null);
-      setFinishMode("bo3");
-      setSetScores([
-        { a: "", b: "" },
-        { a: "", b: "" },
-        { a: "", b: "" }
-      ]);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    const match = ongoing.find((m) => m.id === matchId);
+    if (!match) return;
+    setFinishModal({ matchId, players: match.players });
+    setWinnerId(null);
+    setFinishMode("bo3");
+    setSetScores([
+      { a: "", b: "" },
+      { a: "", b: "" },
+      { a: "", b: "" }
+    ]);
+    setActionErr((prev) => ({ ...prev, finishMatch: null }));
   }
 
   async function submitFinishModal() {
     if (!queue || !finishModal.matchId) return;
     if (!winnerId) {
-      setErr("Select the winner.");
+      setActionErr((prev) => ({ ...prev, finishMatch: "Select the winner." }));
       return;
     }
-    const filled = finishMode === "single"
-      ? setScores.slice(0, 1).filter((s) => s.a.trim() !== "" && s.b.trim() !== "")
-      : setScores.filter((s) => s.a.trim() !== "" && s.b.trim() !== "");
+    const setsToUse = finishMode === "single" ? setScores.slice(0, 1) : setScores;
+    const filled = setsToUse.filter((s) => s.a.trim() !== "" && s.b.trim() !== "");
     if (finishMode === "single" && filled.length < 1) {
-      setErr("Enter the set score.");
+      setActionErr((prev) => ({ ...prev, finishMatch: "Enter the set score." }));
       return;
     }
     if (finishMode === "bo3" && filled.length < 2) {
-      setErr("Enter at least two set scores.");
+      setActionErr((prev) => ({ ...prev, finishMatch: "Enter at least two set scores." }));
       return;
     }
-    const winnerName = finishModal.players.find((p) => p.id === winnerId)?.name || `Player ${winnerId}`;
-    const setText = filled
-      .map((s, idx) => `Set ${idx + 1} ${s.a}-${s.b}`)
-      .join(", ");
-    const scoreText = `Winner: ${winnerName} | Mode: ${finishMode === "single" ? "1 set to 31" : "Best of 3"} | ${setText}`;
+
+    let numericSets: { a: number; b: number }[];
     try {
-      await finishQueueMatch(queue.id, finishModal.matchId, scoreText, token);
+      numericSets = filled.map((s, idx) => {
+        const a = Number(s.a);
+        const b = Number(s.b);
+        if (Number.isNaN(a) || Number.isNaN(b)) throw new Error(`Set ${idx + 1} must be numbers`);
+        return { a, b };
+      });
+    } catch (e: any) {
+      setActionErr((prev) => ({ ...prev, finishMatch: e?.message || "Invalid scores" }));
+      return;
+    }
+
+    await runAction("finishMatch", async () => {
+      await finishQueueMatch(queue.id, finishModal.matchId!, winnerId, numericSets, token);
       await loadQueue(queue.id);
       await refreshPlayers();
       setFinishModal({ matchId: null, players: [] });
@@ -276,20 +279,15 @@ export default function QueueManager() {
         { a: "", b: "" },
         { a: "", b: "" }
       ]);
-      setErr(null);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    }, "Match finished");
   }
 
   async function handleStatusToggle() {
     if (!queue) return;
-    try {
+    await runAction("toggleStatus", async () => {
       await setQueueStatusQueue(queue.id, !queue.isOpen, token);
       await loadQueue(queue.id);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+    });
   }
 
   return (
@@ -300,6 +298,7 @@ export default function QueueManager() {
       </div>
 
       {err && <div className="alert alert-danger py-2 mb-3">{err}</div>}
+      {info && <div className="alert alert-success py-2 mb-3" role="alert">{info}</div>}
 
       <div className="row g-3">
         <div className="col-12 col-lg-4">
@@ -312,7 +311,15 @@ export default function QueueManager() {
                     <label className="form-label small fw-semibold">Name</label>
                     <input className="form-control" value={queueName} onChange={(e) => setQueueName(e.target.value)} />
                   </div>
-                  <button className="btn btn-primary w-100" onClick={handleCreateQueue}>Create queue</button>
+                  <button
+                    className="btn btn-primary w-100"
+                    disabled={loading.createQueue || !queueName.trim()}
+                    onClick={handleCreateQueue}
+                  >
+                    {loading.createQueue && <span className="spinner-border spinner-border-sm me-2" role="status" />}
+                    Create queue
+                  </button>
+                  {actionErr.createQueue && <div className="text-danger small mt-2">{actionErr.createQueue}</div>}
                 </>
               ) : (
                 <>
@@ -320,9 +327,15 @@ export default function QueueManager() {
                     <div><strong>Name:</strong> {queue.name}</div>
                     <div><strong>Status:</strong> {queue.isOpen ? "Open" : "Closed"}</div>
                   </div>
-                  <button className="btn btn-outline-secondary w-100" onClick={handleStatusToggle}>
+                  <button
+                    className="btn btn-outline-secondary w-100"
+                    disabled={loading.toggleStatus}
+                    onClick={handleStatusToggle}
+                  >
+                    {loading.toggleStatus && <span className="spinner-border spinner-border-sm me-2" role="status" />}
                     {queue.isOpen ? "Close queue" : "Open queue"}
                   </button>
+                  {actionErr.toggleStatus && <div className="text-danger small mt-2">{actionErr.toggleStatus}</div>}
                 </>
               )}
             </div>
@@ -345,35 +358,51 @@ export default function QueueManager() {
                   placeholder="Add player name"
                   value={newPlayerName}
                   onChange={(e) => setNewPlayerName(e.target.value)}
+                  disabled={loading.addPlayer}
                 />
-                <button className="btn btn-success" onClick={handleAddPlayer}>Add</button>
+                <button className="btn btn-success" disabled={loading.addPlayer} onClick={handleAddPlayer}>
+                  {loading.addPlayer && <span className="spinner-border spinner-border-sm me-2" role="status" />}
+                  Add
+                </button>
               </div>
+              {actionErr.addPlayer && <div className="text-danger small mb-2">{actionErr.addPlayer}</div>}
 
               <div className="list-group list-group-flush" style={{ maxHeight: 260, overflowY: "auto" }}>
-                {players.map((p) => (
-                  <div key={p.id} className="list-group-item d-flex align-items-center justify-content-between">
-                    <div>
-                      <div className="fw-semibold">{p.displayName}</div>
-                      <div className="text-muted small">Games: {p.gamesPlayed}</div>
+                {uniquePlayers.map((p) => {
+                  const inQueue = queuedIds.has(p.id);
+                  const enqueueKey = `enqueue-${p.id}`;
+                  const deleteKey = `delete-${p.id}`;
+                  return (
+                    <div key={p.id} className="list-group-item d-flex align-items-center justify-content-between">
+                      <div>
+                        <div className="fw-semibold d-flex align-items-center gap-2">
+                          {p.displayName}
+                          {inQueue && <span className="badge bg-success-subtle text-success border border-success-subtle">In queue</span>}
+                        </div>
+                        <div className="text-muted small">Games: {p.gamesPlayed}</div>
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          disabled={!queue || inQueue || loading[enqueueKey]}
+                          onClick={() => queue && handleEnqueue(p.id)}
+                        >
+                          {loading[enqueueKey] && <span className="spinner-border spinner-border-sm me-2" role="status" />}
+                          {inQueue ? "In queue" : "Add to queue"}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          disabled={loading[deleteKey]}
+                          onClick={() => handleDeletePlayer(p.id)}
+                        >
+                          {loading[deleteKey] && <span className="spinner-border spinner-border-sm me-2" role="status" />}
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                    <div className="d-flex gap-2">
-                      <button
-                        className="btn btn-sm btn-outline-secondary"
-                        disabled={!queue}
-                        onClick={() => queue && handleEnqueue(p.id)}
-                      >
-                        Add to queue
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={() => handleDeletePlayer(p.id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {players.length === 0 && (
+                  );
+                })}
+                {uniquePlayers.length === 0 && (
                   <div className="list-group-item text-muted small">No players yet.</div>
                 )}
               </div>
@@ -460,11 +489,13 @@ export default function QueueManager() {
 
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <span className="small text-muted">Next match auto-selected</span>
-                      <button className="btn btn-dark btn-sm background-color green" disabled={!hasNext} onClick={handleStartMatch}>
+                      <button className="btn btn-dark btn-sm" disabled={!hasNext || loading.startAuto} onClick={handleStartMatch}>
+                        {loading.startAuto && <span className="spinner-border spinner-border-sm me-2" role="status" />}
                         Start auto match
                       </button>
                     </div>
                     <NextMatch mode={mode} nextMatch={nextMatch} hasNext={hasNext} />
+                    {actionErr.startAuto && <div className="text-danger small mt-2">{actionErr.startAuto}</div>}
                   </>
       )}
 
@@ -558,11 +589,14 @@ export default function QueueManager() {
                 </div>
               ))}
 
+              {actionErr.finishMatch && <div className="text-danger small mb-2">{actionErr.finishMatch}</div>}
+
               <div className="d-flex justify-content-end gap-2 mt-3">
                 <button className="btn btn-outline-secondary btn-sm" onClick={() => setFinishModal({ matchId: null, players: [] })}>
                   Cancel
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={submitFinishModal}>
+                <button className="btn btn-primary btn-sm" disabled={loading.finishMatch} onClick={submitFinishModal}>
+                  {loading.finishMatch && <span className="spinner-border spinner-border-sm me-2" role="status" />}
                   Finish match
                 </button>
               </div>
@@ -614,9 +648,10 @@ export default function QueueManager() {
                     <div className="d-flex gap-2">
                       <button
                         className="btn btn-dark btn-sm"
-                        disabled={selectedIds.length !== needed}
+                        disabled={selectedIds.length !== needed || loading.startManual}
                         onClick={handleStartManualMatch}
                       >
+                        {loading.startManual && <span className="spinner-border spinner-border-sm me-2" role="status" />}
                         Start Match
                       </button>
                       <button
@@ -627,6 +662,7 @@ export default function QueueManager() {
                         Clear selection
                       </button>
                     </div>
+                    {actionErr.startManual && <div className="text-danger small mt-2">{actionErr.startManual}</div>}
                   </>
                 )}
 
@@ -641,7 +677,7 @@ export default function QueueManager() {
                             <div>
                               <div className="fw-semibold">Match #{m.id}</div>
                               <div className="small text-muted">
-                                {m.players.map(p => p.name).join(" vs ")}
+                                {m.players.map((p: { id: number; name: string }) => p.name).join(" vs ")}
                               </div>
                               {m.startedAt && (
                                 <div className="small text-muted">
@@ -677,22 +713,28 @@ export default function QueueManager() {
                       {history.length === 0 && (
                         <div className="list-group-item small text-muted">No finished matches yet.</div>
                       )}
-                      {history.map((m) => (
-                        <div key={m.id} className="list-group-item">
-                          <div className="d-flex justify-content-between align-items-start gap-2">
-                            <div>
-                              <div className="fw-semibold">Match #{m.id} · {m.mode}</div>
-                              <div className="small text-muted">{m.players.map(p => p.name).join(" vs ")}</div>
-                              {m.scoreText && <div className="small">{m.scoreText}</div>}
-                              <div className="small text-muted">
-                                {m.startTime ? `Started: ${new Date(m.startTime).toLocaleString()}` : ""}
-                                {m.finishTime ? ` · Finished: ${new Date(m.finishTime).toLocaleString()}` : ""}
+                      {history.map((m) => {
+                        const start = m.startTime ? new Date(m.startTime) : null;
+                        const finish = m.finishTime ? new Date(m.finishTime) : null;
+                        const duration = start && finish ? Math.max(0, Math.round((finish.getTime() - start.getTime()) / 60000)) : null;
+                        return (
+                          <div key={m.id} className="list-group-item">
+                            <div className="d-flex justify-content-between align-items-start gap-2">
+                              <div>
+                                <div className="fw-semibold">Match #{m.id} - {m.mode}</div>
+                                <div className="small text-muted">{m.players.map((p: { id: number; name: string }) => p.name).join(" vs ")}</div>
+                                {m.scoreText && <div className="small">{m.scoreText}</div>}
+                                <div className="small text-muted">
+                                  {start ? `Started: ${start.toLocaleString()}` : ""}
+                                  {finish ? ` | Finished: ${finish.toLocaleString()}` : ""}
+                                  {duration !== null ? ` | Duration: ${duration} min` : ""}
+                                </div>
                               </div>
+                              <span className="badge bg-light text-muted">{m.status}</span>
                             </div>
-                            <span className="badge bg-light text-muted">{m.status}</span>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -716,39 +758,50 @@ export default function QueueManager() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-              <h6 className="mb-0">All players ({players.length})</h6>
+              <h6 className="mb-0">All players ({uniquePlayers.length})</h6>
               <button className="btn-close" onClick={() => setShowAllPlayers(false)} />
             </div>
-            <div className="list-group list-group-flush" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+              <div className="list-group list-group-flush" style={{ maxHeight: "70vh", overflowY: "auto" }}>
               <div className="d-flex gap-3">
-                {chunk(players, 10).map((col, idx) => (
+                {chunk(uniquePlayers, 10).map((col, idx) => (
                   <div key={idx} className="list-group list-group-flush" style={{ minWidth: 240 }}>
-                    {col.map((p) => (
-                      <div key={p.id} className="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                          <div className="fw-semibold">{p.displayName}</div>
-                          <div className="text-muted small">Games: {p.gamesPlayed}</div>
+                    {col.map((p) => {
+                      const inQueue = queuedIds.has(p.id);
+                      const enqueueKey = `enqueue-${p.id}`;
+                      const deleteKey = `delete-${p.id}`;
+                      return (
+                        <div key={p.id} className="list-group-item d-flex justify-content-between align-items-center">
+                          <div>
+                            <div className="fw-semibold d-flex align-items-center gap-2">
+                              {p.displayName}
+                              {inQueue && <span className="badge bg-success-subtle text-success border border-success-subtle">In queue</span>}
+                            </div>
+                            <div className="text-muted small">Games: {p.gamesPlayed}</div>
+                          </div>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              disabled={!queue || inQueue || loading[enqueueKey]}
+                              onClick={() => queue && handleEnqueue(p.id)}
+                            >
+                              {loading[enqueueKey] && <span className="spinner-border spinner-border-sm me-2" role="status" />}
+                              {inQueue ? "In queue" : "Add to queue"}
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              disabled={loading[deleteKey]}
+                              onClick={() => handleDeletePlayer(p.id)}
+                            >
+                              {loading[deleteKey] && <span className="spinner-border spinner-border-sm me-2" role="status" />}
+                              Remove
+                            </button>
+                          </div>
                         </div>
-                        <div className="d-flex gap-2">
-                          <button
-                            className="btn btn-sm btn-outline-secondary"
-                            disabled={!queue}
-                            onClick={() => queue && handleEnqueue(p.id)}
-                          >
-                            Add to queue
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleDeletePlayer(p.id)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ))}
-                {players.length === 0 && (
+                {uniquePlayers.length === 0 && (
                   <div className="list-group-item text-muted small">No players yet.</div>
                 )}
               </div>
@@ -804,3 +857,6 @@ function NextMatch({ mode, nextMatch, hasNext }: { mode: "Singles" | "Doubles"; 
     </div>
   );
 }
+
+
+
