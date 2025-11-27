@@ -7,7 +7,7 @@ import Logout from "./pages/Logout";
 import Courts from "./pages/Courts";
 import Queue from "./pages/Queue";
 import QMDashboard from "./pages/QMDashboard";
-import Groups from "./pages/Groups";
+import QueueManager from "./pages/QueueManager";
 
 export default function App() {
   return (
@@ -40,8 +40,7 @@ export default function App() {
 
         <nav style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Link className="topnav" to="/">Courts</Link>
-          <Link className="topnav" to="/groups">Groups</Link>
-          <Link className="topnav" to="/qm">QM</Link>
+          <Link className="topnav" to="/queue-manager">Queue Manager</Link>
           <Link className="topnav" to="/logout">Logout</Link>
         </nav>
 
@@ -60,6 +59,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <Courts />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/queue-manager"
+            element={
+              <RequireAuth>
+                <QueueManager />
               </RequireAuth>
             }
           />
@@ -86,14 +93,6 @@ export default function App() {
             element={
               <RequireAuth>
                 <Logout />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/groups"
-            element={
-              <RequireAuth>
-                <Groups />
               </RequireAuth>
             }
           />

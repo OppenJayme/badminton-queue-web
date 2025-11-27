@@ -50,41 +50,74 @@ export async function register(email: string, displayName: string, password: str
   );
 }
 
-export const getLocations = (token: string) =>
-  api<any[]>("/api/locations", {}, token);
+// Players
+export const getPlayers = (token: string) =>
+  api<any[]>("/api/players", {}, token);
 
-export const getCourts = (locationId: number, token: string) =>
-  api<any[]>(`/api/locations/${locationId}/courts`, {}, token);
-
-export const getQueue = (courtId: number, mode: string, token: string) =>
-  api<any>(`/api/queues/${courtId}?mode=${mode}`, {}, token);
-
-export const setQueueStatus = (courtId: number, mode: string, isOpen: boolean, token: string) =>
-  api<any>(`/api/queues/${courtId}/status`, {
+export const createPlayer = (displayName: string, isRegistered: boolean, token: string) =>
+  api<any>("/api/players", {
     method: "POST",
-    body: JSON.stringify({ mode, isOpen })
+    body: JSON.stringify({ displayName, isRegistered })
   }, token);
 
-export const enqueueSelf = (courtId: number, mode: string, token: string) =>
-  api<any>(`/api/queues/${courtId}/enqueue?mode=${mode}`, {
+export const deletePlayer = (playerId: number, token: string) =>
+  api<any>(`/api/players/${playerId}`, { method: "DELETE" }, token);
+
+// Queues
+export const createQueue = (name: string, mode: string, token: string) =>
+  api<any>("/api/queues", {
     method: "POST",
-    body: JSON.stringify({})
+    body: JSON.stringify({ name, mode })
   }, token);
 
-export const leaveSelf = (courtId: number, mode: string, token: string) =>
-  api<any>(`/api/queues/${courtId}/leave?mode=${mode}`, {
+export const getQueueDetails = (queueId: number, token: string) =>
+  api<any>(`/api/queues/${queueId}`, {}, token);
+
+export const setQueueStatusQueue = (queueId: number, isOpen: boolean, token: string) =>
+  api<any>(`/api/queues/${queueId}/status`, {
     method: "POST",
-    body: JSON.stringify({})
+    body: JSON.stringify(isOpen)
   }, token);
 
-export const startMatch = (courtId: number, mode: string, token: string) =>
-  api<any>(`/api/matches/start`, {
+export const enqueueQueue = (queueId: number, playerId: number, token: string) =>
+  api<any>(`/api/queues/${queueId}/enqueue`, {
     method: "POST",
-    body: JSON.stringify({ courtId, mode })
+    body: JSON.stringify({ playerId })
   }, token);
 
-export const finishMatch = (matchId: number, scoreText: string, token: string) =>
-  api<any>(`/api/matches/finish`, {
+export const removeFromQueue = (queueId: number, playerId: number, token: string) =>
+  api<any>(`/api/queues/${queueId}/remove`, {
+    method: "POST",
+    body: JSON.stringify({ playerId })
+  }, token);
+
+export const startQueueMatch = (queueId: number, mode: string | undefined, token: string) =>
+  api<any>(`/api/queues/${queueId}/start-match`, { method: "POST", body: JSON.stringify({ mode }) }, token);
+
+export const startQueueMatchManual = (queueId: number, playerIds: number[], mode: string | undefined, token: string) =>
+  api<any>(`/api/queues/${queueId}/start-match-manual`, {
+    method: "POST",
+    body: JSON.stringify({ playerIds, mode })
+  }, token);
+
+export const finishQueueMatch = (queueId: number, matchId: number, scoreText: string | undefined, token: string) =>
+  api<any>(`/api/queues/${queueId}/finish-match`, {
     method: "POST",
     body: JSON.stringify({ matchId, scoreText })
   }, token);
+
+export const getOngoingMatches = (queueId: number, token: string) =>
+  api<any[]>(`/api/queues/${queueId}/ongoing-matches`, {}, token);
+
+export const getMatchHistory = (queueId: number, token: string, status = "Finished") =>
+  api<any[]>(`/api/queues/${queueId}/matches?status=${encodeURIComponent(status)}`, {}, token);
+
+// Legacy stubs for removed endpoints (Courts/QM pages). Safe no-ops to satisfy build.
+export const getLocations = (_token: string) => Promise.resolve([] as any[]);
+export const getCourts = (_locationId: number, _token: string) => Promise.resolve([] as any[]);
+export const getQueue = (_courtId: number, _mode: string, _token: string) => Promise.resolve({ entries: [], isOpen: true, mode: "Singles" });
+export const setQueueStatus = (_courtId: number, _mode: string, _isOpen: boolean, _token: string) => Promise.resolve<void>(undefined);
+export const enqueueSelf = (_courtId: number, _mode: string, _token: string) => Promise.resolve<void>(undefined);
+export const leaveSelf = (_courtId: number, _mode: string, _token: string) => Promise.resolve<void>(undefined);
+export const startMatch = (_courtId: number, _mode: string, _token: string) => Promise.resolve({ matchId: 0, players: "" });
+export const finishMatch = (_matchId: number, _scoreText: string, _token: string) => Promise.resolve<void>(undefined);

@@ -14,6 +14,7 @@ export default function Logout() {
     setToken(null);
     setRole(null);
     setName("");
+    localStorage.removeItem("auth");
     navigate("/login", { replace: true });
   }, [setToken, setRole, setName, navigate]);
 

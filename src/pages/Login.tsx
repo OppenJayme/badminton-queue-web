@@ -31,6 +31,11 @@ export default function Login() {
       setToken(res.token);
       setRole(res.role as any);
       setName(res.displayName);
+      localStorage.setItem("auth", JSON.stringify({
+        token: res.token,
+        role: res.role,
+        displayName: res.displayName
+      }));
       nav("/");
     } catch (e: any) {
       setErr(e.message);
