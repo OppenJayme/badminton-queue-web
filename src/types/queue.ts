@@ -1,5 +1,6 @@
-﻿export type Player = {
+export type Player = {
   id: number;
+  userId?: number | null;
   displayName: string;
   gamesPlayed: number;
   isRegistered: boolean;
@@ -20,6 +21,7 @@ export type QueueDetails = {
   mode: "Singles" | "Doubles";
   isOpen: boolean;
   entries: QueueEntry[];
+  sessionId?: number | null;
 };
 
 export type OngoingMatch = {

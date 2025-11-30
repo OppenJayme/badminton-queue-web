@@ -54,20 +54,20 @@ export async function register(email: string, displayName: string, password: str
 export const getPlayers = (token: string) =>
   api<any[]>("/api/players", {}, token);
 
-export const createPlayer = (displayName: string, isRegistered: boolean, token: string) =>
+export const createPlayer = (displayName: string, isRegistered: boolean, token: string, userId?: number) =>
   api<any>("/api/players", {
     method: "POST",
-    body: JSON.stringify({ displayName, isRegistered })
+    body: JSON.stringify({ displayName, isRegistered, userId })
   }, token);
 
 export const deletePlayer = (playerId: number, token: string) =>
   api<any>(`/api/players/${playerId}`, { method: "DELETE" }, token);
 
 // Queues
-export const createQueue = (name: string, mode: string, token: string) =>
+export const createQueue = (name: string, mode: string, token: string, sessionId?: number) =>
   api<any>("/api/queues", {
     method: "POST",
-    body: JSON.stringify({ name, mode })
+    body: JSON.stringify({ name, mode, sessionId })
   }, token);
 
 export const getQueueDetails = (queueId: number, token: string) =>
@@ -117,6 +117,40 @@ export const getOngoingMatches = (queueId: number, token: string) =>
 
 export const getMatchHistory = (queueId: number, token: string, status = "Finished") =>
   api<any[]>(`/api/queues/${queueId}/matches?status=${encodeURIComponent(status)}`, {}, token);
+
+// Sessions
+export const listSessions = (token: string, search?: string) =>
+  api<any[]>(`/api/sessions${search ? `?search=${encodeURIComponent(search)}` : ""}`, {}, token);
+
+export const getSessionDetail = (sessionId: number, token: string) =>
+  api<any>(`/api/sessions/${sessionId}`, {}, token);
+
+export const createSession = (name: string, description: string | undefined, isPublic: boolean, token: string) =>
+  api<any>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ name, description, isPublic })
+  }, token);
+
+export const joinSession = (sessionId: number, token: string) =>
+  api<any>(`/api/sessions/${sessionId}/join`, { method: "POST" }, token);
+
+export const leaveSession = (sessionId: number, token: string) =>
+  api<any>(`/api/sessions/${sessionId}/leave`, { method: "POST" }, token);
+
+export const checkInSession = (sessionId: number, userId: number, token: string) =>
+  api<any>(`/api/sessions/${sessionId}/check-in`, {
+    method: "POST",
+    body: JSON.stringify({ userId })
+  }, token);
+
+export const checkOutSession = (sessionId: number, userId: number, token: string) =>
+  api<any>(`/api/sessions/${sessionId}/check-out`, {
+    method: "POST",
+    body: JSON.stringify({ userId })
+  }, token);
+
+export const deleteSession = (sessionId: number, token: string) =>
+  api<any>(`/api/sessions/${sessionId}`, { method: "DELETE" }, token);
 
 // Legacy stubs for removed endpoints (Courts/QM pages). Safe no-ops to satisfy build.
 export const getLocations = (_token: string) => Promise.resolve([] as any[]);
