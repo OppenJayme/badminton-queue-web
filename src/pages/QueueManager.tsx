@@ -13,6 +13,7 @@ import {
   getSessionDetail,
   removeFromQueue,
   setQueueStatusQueue,
+  setQueueModeQueue,
   startQueueMatch,
   startQueueMatchManual,
   deletePlayer
@@ -337,10 +338,12 @@ export default function QueueManager() {
       if (finishedQueueIdRef.current === id) {
         return null;
       }
+      const normalizedMode =
+        userModeChangedRef.current && queue?.id === res.id ? (queue?.mode ?? res.mode) : res.mode;
       const normalized: QueueDetails = {
         id: res.id,
         name: res.name,
-        mode: res.mode,
+        mode: normalizedMode,
         isOpen: res.isOpen,
         entries: res.entries || [],
         sessionId: res.sessionId ?? null
@@ -743,11 +746,19 @@ export default function QueueManager() {
                     className="form-select form-select-sm"
                     style={{ maxWidth: 140 }}
                     value={mode}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const newMode = e.target.value as "Singles" | "Doubles";
                       userModeChangedRef.current = true;
                       setMode(newMode);
                       setQueue((prev) => (prev ? { ...prev, mode: newMode } : prev));
+                      if (queue) {
+                        try {
+                          await setQueueModeQueue(queue.id, newMode, token);
+                          await loadQueue(queue.id);
+                        } catch (err: any) {
+                          setErr(err?.message || "Failed to update mode");
+                        }
+                      }
                     }}
                   >
                     <option>Singles</option>

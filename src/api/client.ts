@@ -79,6 +79,12 @@ export const setQueueStatusQueue = (queueId: number, isOpen: boolean, token: str
     body: JSON.stringify(isOpen)
   }, token);
 
+export const setQueueModeQueue = (queueId: number, mode: string, token: string) =>
+  api<any>(`/api/queues/${queueId}/mode`, {
+    method: "POST",
+    body: JSON.stringify({ mode })
+  }, token);
+
 export const enqueueQueue = (queueId: number, playerId: number, token: string) =>
   api<any>(`/api/queues/${queueId}/enqueue`, {
     method: "POST",
