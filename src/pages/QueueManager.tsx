@@ -96,18 +96,15 @@ export default function QueueManager() {
     setOngoing([]);
     setHistory([]);
     setSelectedIds([]);
-    setQueueCache((prev) => {
-      if (!queueId) return prev;
-      const next = { ...prev };
-      delete next[queueId];
-      return next;
-    });
-    setLastQueueBySession((prev) => {
-      const next = { ...prev };
-      if (sessionId) delete next[sessionId];
-      return next;
-    });
+    // Clear remembered queue ids so we don't rehydrate finished queues.
     setLastQueueId(null);
+    if (sessionId) {
+      setLastQueueBySession((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+    }
     setMode("Singles");
     setQueueName("Main Queue");
   }

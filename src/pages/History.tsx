@@ -6,6 +6,7 @@ import { queueCacheAtom, lastQueueIdAtom } from "../state/cache";
 import type { MatchHistory } from "../types/queue";
 
 type QueueOption = { id: number; name: string };
+type QueueMeta = { name: string; sessionId?: number | null };
 
 export default function History() {
   const token = useAtomValue(tokenAtom)!;
@@ -16,7 +17,7 @@ export default function History() {
   const [status, setStatus] = useState<string>("Finished");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [queueNameMap, setQueueNameMap] = useState<Record<number, string>>({});
+  const [queueMetaMap, setQueueMetaMap] = useState<Record<number, QueueMeta>>({});
 
   const options: QueueOption[] = useMemo(() => {
     const ids = new Set<number>();
@@ -29,10 +30,10 @@ export default function History() {
   }, [queueCache, lastQueueId]);
 
   useEffect(() => {
-    // populate names from cache
-    const map: Record<number, string> = {};
-    Object.values(queueCache).forEach((q) => (map[q.queue.id] = q.queue.name));
-    setQueueNameMap(map);
+    // populate names/session from cache
+    const map: Record<number, QueueMeta> = {};
+    Object.values(queueCache).forEach((q) => (map[q.queue.id] = { name: q.queue.name, sessionId: q.queue.sessionId }));
+    setQueueMetaMap(map);
   }, [queueCache]);
 
   useEffect(() => {
@@ -41,17 +42,25 @@ export default function History() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queueId, status]);
 
+  async function ensureQueueMeta(id: number) {
+    if (queueMetaMap[id]) return queueMetaMap[id];
+    try {
+      const q = await getQueueDetails(id, token);
+      const meta = { name: q.name || `Queue #${id}`, sessionId: q.sessionId ?? null };
+      setQueueMetaMap((prev) => ({ ...prev, [id]: meta }));
+      return meta;
+    } catch {
+      return { name: `Queue #${id}`, sessionId: null };
+    }
+  }
+
   async function load(id: number, s: string) {
     setLoading(true);
     setErr(null);
     try {
       const res = await getMatchHistory(id, token, s);
       setMatches(res);
-      if (!queueNameMap[id]) {
-        // try to fetch name once
-        const q = await getQueueDetails(id, token);
-        setQueueNameMap((prev) => ({ ...prev, [id]: q.name || `Queue #${id}` }));
-      }
+      await ensureQueueMeta(id);
     } catch (e: any) {
       setErr(e.message);
       setMatches([]);
@@ -129,3 +138,4 @@ export default function History() {
     </div>
   );
 }
+
